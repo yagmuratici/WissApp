@@ -1,17 +1,23 @@
 ﻿using AppCore.Services;
 using AppCore.Services.Base;
 using AutoMapper.QueryableExtensions;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.Data.Entity;
 using System.Linq;
+using System.Security.Claims;
 using System.Web.Http;
 using WissAppEF.Contexts;
 using WissAppEntities.Entities;
+using WissAppWebApi.Attributes;
+using WissAppWebApi.Configs;
 using WissAppWebApi.Models;
 
 namespace WissAppWebApi.Controllers
 {
+    [RoutePrefix("api/Users")]
+    [ClaimsAuthorize(ClaimType = "role", ClaimValue = "admin")] //user işlemlerini sadece admin yapabilir.
     public class UsersController : ApiController
     {
         DbContext db;
@@ -22,11 +28,12 @@ namespace WissAppWebApi.Controllers
             userService = new Service<Users>(db);
         }
 
+       
         public IHttpActionResult Get()
         {
             try
             {
-                var entities = userService.GetEntities(); //etitity çektik
+                var entities = userService.GetEntities(); //etity çektik
 
                 //1. yol ama 2.yol olarak automapper kullanacağız
                 //var model = entities.Select(e => new UsersModel()
@@ -58,6 +65,8 @@ namespace WissAppWebApi.Controllers
             
         }
 
+
+       
         public IHttpActionResult Get(int id)
         {
             try
@@ -72,6 +81,7 @@ namespace WissAppWebApi.Controllers
             }
         }
 
+        
         public IHttpActionResult Post(UsersModel usersModel)
         {
             try
@@ -85,6 +95,76 @@ namespace WissAppWebApi.Controllers
             {
                 return BadRequest();
             }
+        }
+
+        
+        public IHttpActionResult Put(UsersModel usersModel)
+        {
+            try
+            {
+                var entity = userService.GetEntity(usersModel.Id);
+                entity.BirthDate = usersModel.BirthDate;
+                entity.EMail = usersModel.EMail;
+                entity.Gender = usersModel.Gender;
+                entity.Active = usersModel.Active;
+                entity.Location = usersModel.Location;
+                entity.Password = usersModel.Password;
+                entity.RoleId = usersModel.RoleId;
+                entity.School = usersModel.School;
+                entity.UserName = usersModel.UserName;
+                userService.UpdateEntity(entity);
+                var model = Mapping.mapper.Map<UsersModel>(entity);
+                return Ok(model);
+            }
+            catch (Exception)
+            {
+                return BadRequest();
+            }
+        }
+
+        
+        public IHttpActionResult Delete(int id)
+        {
+            try
+            {
+                var entity = userService.GetEntity(id);
+                userService.DeleteEntity(entity);
+                var model = Mapping.mapper.Map<UsersModel>(entity);
+                return Ok(model); //hangi kaydı sildiğini görmesi için.
+            }
+            catch (Exception)
+            {
+                return BadRequest();
+            }
+
+        }
+
+        [Route("GetAll")]
+        public IHttpActionResult GetAll()
+        {
+            try
+            {
+                var entities = userService.GetEntities();
+                var resultEntities = JsonConvert.SerializeObject(entities , Formatting.None, new JsonSerializerSettings() {  ReferenceLoopHandling = ReferenceLoopHandling.Ignore});
+                return Ok(JsonConvert.DeserializeObject(resultEntities));
+            }
+            catch (Exception)
+            {
+                return BadRequest();
+            }
+        }
+
+        [Route("Logout")]
+        [HttpGet]
+        public IHttpActionResult Logout()
+        {
+            var principal = RequestContext.Principal as ClaimsPrincipal;
+            if(principal.Identity.IsAuthenticated)
+            {
+                UserConfig.AddLoggedOutUser(principal.FindFirst(e => e.Type == "user").Value); //principal mevcut kullanıcı.
+                return Ok("User logged out.");
+            }
+            return BadRequest("User did not login.");
         }
     }
 }
